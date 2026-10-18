@@ -1,3 +1,4 @@
+import {mountHistory,observeHistory} from "./history-view";
 import {mountHotkeys} from "./hotkey-settings";
 import "./style.css";
 import { native, getStatus, observeStatus, copyText, translateText, setOverlay, hideOverlay, dismissOverlay, observeOverlay, setPinned, dragPanel, resizePanel, setPanelSize, resetPanelPosition, showMain, observeTranslations, currentWindowLabel, reportFrontendReady, openOverlayCentered, getOverlayView, type OverlayView, type TranslationSnapshot, type AppStatus, type Translation } from "./bridge";
@@ -32,6 +33,7 @@ let storageAvailable = true;
 try { drafts = restoreDrafts(localStorage.getItem(DRAFT_KEY)); } catch { storageAvailable = false; }
 
 const paths: Record<string, string> = {
+  history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   translate: '<path d="M4 5h12M10 3v2c0 6-3 10-7 12m2-9c1 4 4 7 8 9m1 4 4-10 4 10m-6-3h4"/>',
   assistant: '<path d="M5 4h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-6 3V6a2 2 0 0 1 2-2Z"/><path d="m12 7 1.2 3.8L17 12l-3.8 1.2L12 17l-1.2-3.8L7 12l3.8-1.2Z"/>',
   browser: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',
@@ -43,7 +45,7 @@ const paths: Record<string, string> = {
   eye: '<path d="M3 7h18M6 12h12m-9 5h6"/>',
 };
 function icon(name: string): string { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.arrow}</svg>`; }
-const names = { translate: "Перевод", overlay: "Настройки", assistant: "Помощник", browser: "Браузер", guide: "О проекте" };
+const names = { translate: "Перевод", overlay: "Настройки", history: "История", assistant: "Помощник", browser: "Браузер", guide: "О проекте" };
 
 app.innerHTML = `
   <div class="shell">
@@ -98,6 +100,10 @@ function render(): void {
     if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
   });
   if (section === "translate") renderTranslate();
+  if (section === "history") {
+    content.innerHTML=heading("HISTORY","История переводов","")+'<div id="history-root"></div>';
+    mountHistory(document.querySelector<HTMLElement>("#history-root")!);
+  }
   if (section === "overlay") renderOverlayControls();
   if (section === "assistant") renderAssistant();
   if (section === "browser") renderBrowser();
@@ -311,6 +317,7 @@ document.addEventListener("keydown", event => {
 });
 
 async function initialize(): Promise<void> {
+  if (role==="main") {try {await observeHistory(notify);}catch(error){notify(String(error));}}
   try {
     if (overlayMode) await observeScreenText(image => {
       direction = "auto-ru";

@@ -70,7 +70,7 @@ impl RuntimeState {
 
 pub fn validate_clipboard_text(text: &str) -> Result<(), String> {
     if text.trim().is_empty() { return Err("Нечего копировать".to_owned()); }
-    if text.chars().count() > 12_000 { return Err("Текст слишком длинный".to_owned()); }
+    if text.chars().count() > 24_000 { return Err("Текст слишком длинный".to_owned()); }
     Ok(())
 }
 
@@ -104,7 +104,7 @@ mod tests {
     fn clipboard_accepts_slovak_and_rejects_empty_and_excessive_text() {
         assert!(validate_clipboard_text("Ďakujem, kde je železo?").is_ok());
         assert!(validate_clipboard_text(" \n ").is_err());
-        assert!(validate_clipboard_text(&"č".repeat(12_000)).is_ok());
-        assert!(validate_clipboard_text(&"č".repeat(12_001)).is_err());
+        assert!(validate_clipboard_text(&"č".repeat(24_000)).is_ok());
+        assert!(validate_clipboard_text(&"č".repeat(24_001)).is_err());
     }
 }

@@ -247,3 +247,14 @@ body[data-mode="overlay"] .language-pair #swap-languages { display: grid; place-
 .hotkey-setting { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, auto) auto; gap: 8px; align-items: center; margin: 10px 0; }
 .hotkey-bind[aria-pressed="true"] { outline: 2px solid #aaa; }
 @media (max-width: 600px) { .hotkey-setting { grid-template-columns: 1fr auto; } .hotkey-setting > span { grid-column: 1 / -1; } }
+.history-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.history-toolbar label { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.history-toolbar input { width: auto; }
+#history-search { width: 100%; }
+#history-message { color: #c8c8c8; overflow-wrap: anywhere; }
+.history-card { border: 1px solid var(--line); border-radius: 12px; background: #181818; margin: 14px 0; padding: 16px; }
+.history-meta { color: var(--muted); font-size: 12px; }
+.history-source, .history-translation { font-family: inherit; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 250px; overflow: auto; line-height: 1.5; }
+.history-source { color: #aaa; font-size: 14px; }
+.history-translation { font-size: 17px; }
+.history-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }

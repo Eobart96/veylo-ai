@@ -16,6 +16,7 @@ struct Inner {
     region: Option<Region>, translated: Option<String>, error: Option<String>, saved: Option<Saved>,
     blocks: Vec<ScreenBlock>,
     line_point: Option<(u32,u32)>,
+    mode: crate::history::Mode,
 }
 impl Inner {
     fn begin(&mut self) -> Result<(u64, Arc<AtomicBool>), String> {
@@ -201,6 +202,7 @@ async fn start_mode(app: tauri::AppHandle, reuse: bool, full_screen: bool, curso
             if s.generation != id || s.phase != Phase::Freezing { return Err("Выделение отменено.".into()); }
             s.context = Some(context);
             s.line_point = local_pointer;
+            s.mode=if cursor_delay.is_some(){crate::history::Mode::Cursor}else if full_screen{crate::history::Mode::Screen}else{crate::history::Mode::Area};
         }
         overlay::prepare_capture_windows(&app)?;
         overlay::hide_overlay(app.clone())?; main.hide().map_err(|e| e.to_string())?;
@@ -265,12 +267,12 @@ async fn finish(app: tauri::AppHandle, region: Region, generation: u64) -> Resul
     let p = window.outer_position().map_err(|e| e.to_string())?; let size = window.inner_size().map_err(|e| e.to_string())?;
     if (p.x, p.y, size.width, size.height) != (context.monitor.x, context.monitor.y, context.monitor.width, context.monitor.height) { return Err("Монитор изменился. Нажми Esc и повтори выделение.".into()); }
     let rect = pixels(region, context.monitor.width, context.monitor.height)?;
-    let (id, frame, token, rect, line_point) = {
+    let (id, frame, token, rect, line_point, mode) = {
         let state = app.state::<Capture>(); let mut s = state.0.lock().map_err(|e| e.to_string())?;
         if s.phase != Phase::Selecting || !s.accepts(generation) { return Err("Выделение уже закрыто.".into()); }
         let frame = s.frame.clone().ok_or("Кадр не загружен")?; let token = s.cancelled.clone().ok_or("Нет запроса")?;
         s.region = Some(region); s.saved = Some(Saved { monitor: context.monitor, previous: context.previous, region }); s.phase = Phase::Translating; s.worker = true;
-        (s.generation, frame, token, rect, s.line_point)
+        (s.generation, frame, token, rect, s.line_point, s.mode)
     };
     publish(&app);
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -297,6 +299,7 @@ async fn finish(app: tauri::AppHandle, region: Region, generation: u64) -> Resul
         release(&app, &mut s);
     }
     let _ = app.state::<crate::status::RuntimeState>().set_ai_connected(true);
+    crate::history::record(&app,mode,image.blocks.iter().map(|block|block.source.as_str()).collect::<Vec<_>>().join("\n\n"),&image.translation);
     let _ = app.emit("translation-state", snapshot); let _ = app.emit_to("overlay", "screen-result", image); publish(&app);
     Ok(())
 }

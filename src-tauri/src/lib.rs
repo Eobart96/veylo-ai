@@ -7,6 +7,7 @@ mod window_focus;
 mod screen_capture;
 mod screen_image;
 mod hotkeys;
+mod history;
 
 use status::{AppStatus, RuntimeState};
 use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder, Emitter, Manager, State};
@@ -26,7 +27,12 @@ async fn translate_text(app: tauri::AppHandle, text: String, direction: translat
         }
     };
     let _ = app.emit("translation-state", start);
-    let result = tauri::async_runtime::spawn_blocking(move || translation::translate(&text, direction))
+    let history_app=app.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let result=translation::translate(&text,direction);
+        if let Ok(translation)=&result {history::record(&history_app,history::Mode::Text,text,translation);}
+        result
+    })
         .await.map_err(|_| "Ошибка выполнения перевода.".to_owned());
     // Also release on a worker panic.
     let result = result.and_then(|result| result);
@@ -70,6 +76,7 @@ pub fn run() {
     builder
         .manage(RuntimeState::default())
         .manage(hotkeys::Hotkeys::default())
+        .manage(history::History::default())
         .manage(overlay::Overlay::default())
         .manage(translation::Translator::default())
         .manage(session::Session::default())
@@ -90,6 +97,7 @@ pub fn run() {
         })
         .setup(|app| {
             overlay::initialize(app.handle())?;
+            if let Err(error)=history::initialize(app.handle()){eprintln!("{error}");}
             // Tray is a recovery route if the shortcut is occupied by another app.
             let show = MenuItem::with_id(app, "show", "Открыть приложение", true, None::<&str>)?;
             let overlay_item = MenuItem::with_id(app, "overlay", "Открыть оверлей", true, None::<&str>)?;
@@ -115,11 +123,12 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![hotkeys::get_hotkeys, hotkeys::set_hotkey, hotkeys::set_hotkey_recording, get_app_status, translation_snapshot, screen_capture::start_screen_capture, screen_capture::start_cursor_line, screen_capture::screen_capture_frame, screen_capture::screen_capture_status, screen_capture::finish_screen_capture, screen_capture::cancel_screen_capture, overlay::backdrop_style_ready, overlay::frontend_ready, overlay::dismiss_overlay, overlay::open_overlay_centered, overlay::show_main, overlay::set_pinned, overlay::drag_panel, overlay::set_panel_size, overlay::reset_panel_position, overlay::hide_overlay, overlay::set_overlay, overlay::overlay_view, copy_text, translate_text])
+        .invoke_handler(tauri::generate_handler![history::history_action, hotkeys::get_hotkeys, hotkeys::set_hotkey, hotkeys::set_hotkey_recording, get_app_status, translation_snapshot, screen_capture::start_screen_capture, screen_capture::start_cursor_line, screen_capture::screen_capture_frame, screen_capture::screen_capture_status, screen_capture::finish_screen_capture, screen_capture::cancel_screen_capture, overlay::backdrop_style_ready, overlay::frontend_ready, overlay::dismiss_overlay, overlay::open_overlay_centered, overlay::show_main, overlay::set_pinned, overlay::drag_panel, overlay::set_panel_size, overlay::reset_panel_position, overlay::hide_overlay, overlay::set_overlay, overlay::overlay_view, copy_text, translate_text])
         .build(tauri::generate_context!())
         .expect("Veylo AI failed to start")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                if let Err(error)=history::flush(app){eprintln!("{error}");}
                 if let Err(error) = overlay::flush(app) { eprintln!("{error}"); }
             }
         });

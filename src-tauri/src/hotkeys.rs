@@ -14,15 +14,15 @@ fn index(action:Action)->usize { ACTIONS.iter().position(|a|*a==action).unwrap()
 struct Config { keys:[String;4] }
 impl Default for Config { fn default()->Self { Self {keys:DEFAULTS.map(str::to_owned)} } }
 #[derive(Default)]
-struct Inner { config:Config,active:[Option<String>;4],errors:[Option<String>;4],recording:Option<Instant>,load_error:Option<String> }
+struct Inner { ready:bool,revision:u64,config:Config,active:[Option<String>;4],errors:[Option<String>;4],recording:Option<Instant>,load_error:Option<String> }
 #[derive(Default)]
 pub struct Hotkeys(Mutex<Inner>);
-#[derive(Serialize)]
+#[derive(Clone,Serialize)]
 pub struct Binding {action:Action,key:String,registered:bool,error:Option<String>}
-#[derive(Serialize)]
-pub struct View {bindings:Vec<Binding>,error:Option<String>}
+#[derive(Clone,Serialize)]
+pub struct View {ready:bool,revision:u64,bindings:Vec<Binding>,error:Option<String>}
 impl Inner {
-    fn view(&self)->View { View {bindings:ACTIONS.iter().enumerate().map(|(i,&action)|Binding{action,key:self.active[i].as_ref().unwrap_or(&self.config.keys[i]).clone(),registered:self.active[i].is_some(),error:self.errors[i].clone()}).collect(),error:self.load_error.clone()} }
+    fn view(&self)->View { View {ready:self.ready,revision:self.revision,bindings:ACTIONS.iter().enumerate().map(|(i,&action)|Binding{action,key:self.active[i].as_ref().unwrap_or(&self.config.keys[i]).clone(),registered:self.active[i].is_some(),error:self.errors[i].clone()}).collect(),error:self.load_error.clone()} }
 }
 pub fn normalize(raw:&str)->Result<String,String> {
     if raw.len()>80 {return Err("Слишком длинное сочетание.".into());}
@@ -68,7 +68,10 @@ where F:FnMut(bool,&str)->Result<(),String>,S:FnMut(&Config)->Result<(),String>{
     Ok(next)
 }
 #[tauri::command]
-pub fn get_hotkeys(app:tauri::AppHandle)->Result<View,String>{Ok(app.state::<Hotkeys>().0.try_lock().map_err(|_|"Настройки клавиш изменяются. Повтори через секунду.")?.view())}
+pub async fn get_hotkeys(app:tauri::AppHandle)->Result<View,String>{
+    tauri::async_runtime::spawn_blocking(move||Ok(app.state::<Hotkeys>().0.lock().map_err(|_|"Настройки клавиш недоступны.")?.view()))
+        .await.map_err(|_|"Не удалось загрузить горячие клавиши.".to_owned())?
+}
 #[tauri::command]
 pub fn set_hotkey_recording(app:tauri::AppHandle,window:tauri::WebviewWindow,recording:bool)->Result<(),String>{
     if window.label()!="main"{return Err("Назначение клавиш доступно в программе.".into());}
@@ -78,6 +81,7 @@ pub fn stop_recording(app:&tauri::AppHandle){if let Ok(mut s)=app.state::<Hotkey
 
 #[cfg(feature="overlay")]
 fn publish(app:&tauri::AppHandle,s:&Inner){
+    let _=app.emit("hotkeys-changed",s.view());
     let state=app.state::<crate::status::RuntimeState>();
     let _=state.set_shortcut_result(if s.active[0].is_some(){Ok(())}else{Err(s.errors[0].clone().unwrap_or_default())},s.active[0].as_ref().unwrap_or(&s.config.keys[0]));
     let _=state.set_capture_shortcut(s.active[1].is_some(),s.active[1].as_ref().unwrap_or(&s.config.keys[1]));
@@ -99,6 +103,7 @@ pub fn initialize(app:&tauri::AppHandle)->Result<(),String>{
         #[cfg(debug_assertions)]
         println!("HOTKEY_READY action={:?} registered={} key={}",ACTIONS[i],s.active[i].is_some(),s.active[i].as_ref().unwrap_or(&s.config.keys[i]));
     }
+    s.ready=true;s.revision+=1;
     publish(app,&s);Ok(())
 }
 #[tauri::command]
@@ -117,6 +122,7 @@ pub async fn set_hotkey(app:tauri::AppHandle,window:tauri::WebviewWindow,action:
         },|config|save(&path,config))?;
         let chosen=next.keys[i].clone();s.config=next;s.active[i]=Some(chosen.clone());s.errors[i]=None;s.load_error=None;
         if let Some(old)=old.filter(|old|old!=&chosen){if app.global_shortcut().unregister(old.as_str()).is_err(){s.errors[i]=Some("Новая клавиша работает. Для освобождения старой перезапусти Veylo AI.".into());}}
+        s.revision+=1;
         publish(&app,&s);Ok(s.view())
     }).await.map_err(|_|"Не удалось изменить горячую клавишу.".to_owned())?
 }
@@ -141,6 +147,11 @@ pub fn handle(app:&tauri::AppHandle,triggered:&tauri_plugin_global_shortcut::Sho
 #[cfg(test)]
 mod tests{
     use super::*;
+    #[test]fn startup_view_is_pending_until_registration_completes(){
+        let mut state=Inner::default();assert!(!state.view().ready);assert_eq!(state.view().revision,0);
+        state.config.keys[2]="Ctrl + Alt + R".into();state.active=state.config.keys.clone().map(Some);state.ready=true;state.revision=1;
+        let view=state.view();assert!(view.ready);assert_eq!(view.revision,1);assert_eq!(view.bindings[2].key,"Ctrl + Alt + R");assert!(view.bindings.iter().all(|binding|binding.registered));
+    }
     #[test]fn validates_and_normalizes_keys(){
         assert_eq!(normalize(" shift + control + q ").unwrap(),"Ctrl + Shift + Q");assert_eq!(normalize("F08").unwrap(),"F8");
         for bad in ["A","F","Shift + Q","Esc","Ctrl + Ctrl + A","Ctrl + A + B","Alt +","F25","Super + Q"]{assert!(normalize(bad).is_err(),"{bad}");}

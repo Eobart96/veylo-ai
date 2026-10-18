@@ -19,7 +19,7 @@ test("application, translator and dim layer have distinct routes and independent
   assert.equal(windowRole("?window=overlay", "main"), "main");
   assert.equal(windowRole("?window=backdrop"), "backdrop");
   assert.equal(windowRole("", "backdrop"), "backdrop");
-  assert.deepEqual(visibleSections("main"), ["overlay", "guide"]);
+  assert.deepEqual(visibleSections("main"), ["overlay", "history", "guide"]);
   assert.deepEqual(visibleSections("overlay"), []);
   assert.deepEqual(visibleSections("backdrop"), []);
   const config = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));

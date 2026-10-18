@@ -151,7 +151,8 @@ try {
     window.isTauri = true;
     const callbacks = new Map(), events = new Map(); let next = 1;
     window.mockCalls = [];
-    window.mockHotkeys = {bindings:[{action:'overlay',key:'Ctrl + Shift + Space',registered:true,error:null},{action:'screen',key:'Alt + Q',registered:true,error:null},{action:'area',key:'Alt + E',registered:true,error:null},{action:'cursor',key:'Alt + W',registered:true,error:null}],error:null};
+    window.mockHotkeys = {ready:!location.search.includes("window=main"),revision:0,bindings:[{action:'overlay',key:'Ctrl + Shift + Space',registered:true,error:null},{action:'screen',key:'Alt + Q',registered:true,error:null},{action:'area',key:'Alt + E',registered:true,error:null},{action:'cursor',key:'Alt + W',registered:true,error:null}],error:null};
+    window.mockHistory={revision:1,enabled:true,error:null,entries:[{id:1,createdAtMs:1000,mode:'text',direction:'auto-ru',source:'Ahoj',translation:'Привет',elapsedMs:20},{id:2,createdAtMs:2000,mode:'cursor',direction:'auto-ru',source:'<img src=x onerror=alert(1)> Find iron',translation:'Найди железо',elapsedMs:30}]};
     window.mockGeneration = 1;
     window.mockEmit = (name, payload) => {
       if (name === 'screen-capture-state' && payload.generation !== undefined) window.mockGeneration = Math.max(window.mockGeneration, payload.generation);
@@ -183,11 +184,21 @@ try {
         }
         if (command === 'overlay_view') return { pinned: true, visible: true, editing: false, width: 360, height: 280, ready: true, openError: null, saveError: null };
         if (command === 'translation_snapshot') return { revision: 0, busy: false, entries: [null, null] };
-        if (command === 'get_hotkeys') return window.mockHotkeys;
+        if (command === 'get_hotkeys') return structuredClone(window.mockHotkeys);
+        if (command === 'history_action') {
+          const action=args.action; let exportPath=null;
+          if(action.type==='setEnabled')window.mockHistory.enabled=action.enabled;
+          if(action.type==='remove')window.mockHistory.entries=window.mockHistory.entries.filter(entry=>entry.id!==action.id);
+          if(action.type==='clear')window.mockHistory.entries=[];
+          if(action.type==='export')exportPath='/Downloads/Veylo AI/translation-history-test.json';
+          if(action.type!=='read')window.mockHistory.revision++;
+          return {snapshot:structuredClone(window.mockHistory),exportPath};
+        }
+        if(command==='copy_text')return;
         if (command === 'set_hotkey_recording') {window.mockRecording=args.recording;return;}
         if (command === 'set_hotkey') {
           if(args.key==='Alt + Q') throw new Error('Комбинация занята. Прежняя оставлена.');
-          window.mockHotkeys.bindings.find(binding=>binding.action===args.action).key=args.key;return window.mockHotkeys;
+          window.mockHotkeys.bindings.find(binding=>binding.action===args.action).key=args.key;window.mockHotkeys.revision++;return structuredClone(window.mockHotkeys);
         }
         if (command === 'translate_text') return { text: 'Привет, где железо?', direction: args.direction, elapsedMs: 10 };
         if (command === 'get_app_status') return { shortcutPending: false, shortcutRegistered: true, shortcut: 'Ctrl + Shift + Space' };
@@ -388,7 +399,18 @@ try {
   await settingsPage.locator('[data-bind-action="overlay"]').waitFor();
   assert.match(await settingsPage.locator('.game-label').textContent(),/Veylo AI/);
   assert.match(await settingsPage.locator('.session-tag').textContent(),/AI-помощник/);
+  await settingsPage.waitForFunction(()=>window.mockCalls.some(call=>call.command==='get_hotkeys'));
+  assert.equal(await settingsPage.locator('[data-bind-action="overlay"]').isDisabled(),true);
+  assert.equal(await settingsPage.locator('#hotkey-settings .open-error').count(),0,'Pending startup is not a registration failure');
+  await settingsPage.evaluate(()=>{
+    window.mockHotkeys.ready=true;window.mockHotkeys.revision=1;
+    window.mockHotkeys.bindings.find(binding=>binding.action==='overlay').key='F9';
+    window.mockEmit('hotkeys-changed',structuredClone(window.mockHotkeys));
+  });
   await settingsPage.waitForFunction(()=>!document.querySelector('[data-bind-action="overlay"]').disabled);
+  assert.equal(await settingsPage.locator('[data-bind-action="overlay"]').textContent(),'F9','Loaded custom binding replaces initial defaults');
+  await settingsPage.evaluate(()=>window.mockEmit('hotkeys-changed',{ready:false,revision:0,bindings:[],error:null}));
+  assert.equal(await settingsPage.locator('[data-bind-action="overlay"]').textContent(),'F9','Late startup snapshot cannot replace registered bindings');
   assert.equal(await settingsPage.locator('[data-bind-action]').count(),4);
   await settingsPage.locator('[data-bind-action="area"]').click();
   await settingsPage.waitForFunction(()=>window.mockRecording===true);
@@ -408,7 +430,33 @@ try {
   assert.equal(await settingsPage.locator('[data-bind-action="area"]').textContent(),'Ctrl + Alt + R');
   await settingsPage.locator('[data-reset-action="area"]').click();
   await settingsPage.waitForFunction(()=>document.querySelector('[data-bind-action="area"]').textContent==='Alt + E');
+  await settingsPage.evaluate(()=>{
+    window.mockEmit('hotkeys-changed',{...structuredClone(window.mockHotkeys),revision:window.mockHotkeys.revision-1,bindings:[]});
+  });
+  assert.equal(await settingsPage.locator('[data-bind-action="area"]').textContent(),'Alt + E','Late response cannot replace saved binding');
   await settingsPage.screenshot({path:path.join(root,'.cache/adaptive/hotkey-settings.png')});
+  await settingsPage.locator('[data-section="history"]').click();
+  await settingsPage.locator('[data-history-id="2"]').waitFor();
+  assert.equal(await settingsPage.locator('.history-card').count(),2);
+  assert.equal(await settingsPage.locator('.history-card img').count(),0,'History source remains inert text');
+  await settingsPage.locator('#history-search').fill('жЕлЕЗо');
+  await settingsPage.waitForFunction(()=>document.querySelectorAll('.history-card').length===1);
+  await settingsPage.locator('[data-history-copy="translation"]').click();
+  const copied=await settingsPage.evaluate(()=>window.mockCalls.findLast(call=>call.command==='copy_text'));
+  assert.equal(copied.args.text,'Найди железо');
+  await settingsPage.locator('#history-export').click();
+  await settingsPage.locator('#history-message').filter({hasText:'Сохранено:'}).waitFor();
+  await settingsPage.locator('#history-enabled').uncheck();
+  await settingsPage.waitForFunction(()=>window.mockHistory.enabled===false);
+  await settingsPage.locator('#history-search').fill('');
+  await settingsPage.waitForFunction(()=>document.querySelectorAll('.history-card').length===2);
+  await settingsPage.screenshot({path:path.join(root,'.cache/adaptive/history.png')});
+  await settingsPage.locator('[data-history-remove="2"]').click();
+  await settingsPage.waitForFunction(()=>document.querySelectorAll('.history-card').length===1);
+  await settingsPage.locator('#history-clear').click();
+  assert.equal(await settingsPage.locator('.history-card').count(),1,'Clear requires a second explicit click');
+  await settingsPage.locator('#history-clear').click();
+  await settingsPage.waitForFunction(()=>document.querySelectorAll('.history-card').length===0);
   await context.close();
   console.log('SCREEN_UI_FLOW_OK (frozen frame, in-place bounds, selection click suppression, Esc, stale result, direct image without second request)');
   console.log('ADAPTIVE_LAYOUT_OK');

@@ -1,4 +1,4 @@
-export type Section = "translate" | "overlay" | "assistant" | "browser" | "guide";
+export type Section = "translate" | "overlay" | "history" | "assistant" | "browser" | "guide";
 export const LANGUAGES = [{ code: "sk", name: "Словацкий", textLabel: "Текст на словацком" }, { code: "ru", name: "Русский", textLabel: "Текст на русском" }, { code: "en", name: "Английский", textLabel: "Текст на английском" }] as const;
 export type Language = typeof LANGUAGES[number]["code"];
 // Order matches the Rust session snapshot; the first two preserve old sessions.
@@ -43,5 +43,5 @@ export function mergeDraftChange(stored: Drafts, edited: Drafts, key: keyof Draf
 }
 
 export function parseSection(value: string | undefined): Section | null {
-  return value === "translate" || value === "overlay" || value === "assistant" || value === "browser" || value === "guide" ? value : null;
+  return value === "translate" || value === "overlay" || value === "history" || value === "assistant" || value === "browser" || value === "guide" ? value : null;
 }

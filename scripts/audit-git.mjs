@@ -7,7 +7,7 @@ const files=[...new Set(execFileSync('git',['ls-files','--cached','--others','--
 const issues=[];let bytes=0;
 const secrets=[/-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/,/\bgh[pousr]_[A-Za-z0-9]{20,}/,/\bgithub_pat_[A-Za-z0-9_]{25,}/,/\bsk-[A-Za-z0-9_-]{24,}/,/\bAKIA[A-Z0-9]{16}/];
 for(const file of files){
-  if(/(^|\/)(?:node_modules|target|dist|\.cache|\.tools|\.unlazy|\.git|local-history|del|_git-package)(\/|$)|(^|\/)\.env(?:\.|$)|\.(?:log|exe|msi|pdb|zip|db|sqlite3?|pem|pfx)$/i.test(file)){issues.push({file,reason:'forbidden-path'});continue;}
+  if(/(^|\/)(?:node_modules|target|dist|\.cache|\.tools|\.unlazy|\.git|local-history|history-exports|del|_git-package)(\/|$)|(^|\/)translation-history[^/]*\.json$|(^|\/)\.env(?:\.|$)|\.(?:log|exe|msi|pdb|zip|db|sqlite3?|pem|pfx)$/i.test(file)){issues.push({file,reason:'forbidden-path'});continue;}
   const size=statSync(path.join(root,file)).size;bytes+=size;
   if(size>2*1024*1024){issues.push({file,reason:'large-file'});continue;}
   if(/\.(?:png|ico|bgra)$/.test(file))continue;

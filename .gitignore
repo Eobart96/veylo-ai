@@ -30,3 +30,5 @@ src-tauri/icons/*
 !src-tauri/icons/128x128.png
 !src-tauri/icons/128x128@2x.png
 !src-tauri/icons/icon.ico
+translation-history*.json
+history-exports/
