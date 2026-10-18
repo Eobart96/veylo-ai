@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-local",
+  "description": "Local application and overlay interfaces; no remote pages or filesystem access.",
+  "windows": ["main", "overlay", "backdrop"],
+  "permissions": ["core:default"]
+}

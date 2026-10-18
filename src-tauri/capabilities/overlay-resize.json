@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-resize",
+  "description": "Allow resizing only the local compact translator window.",
+  "windows": ["overlay"],
+  "permissions": ["core:window:allow-start-resize-dragging"]
+}

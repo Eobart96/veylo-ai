@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Veylo AI",
+  "mainBinaryName": "veylo-ai",
+  "version": "0.1.0",
+  "identifier": "local.ari.overlay",
+  "build": {
+    "beforeDevCommand": "npm.cmd run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm.cmd run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "Veylo AI — AI-помощник",
+      "width": 940,
+      "height": 650,
+      "minWidth": 760,
+      "minHeight": 600,
+      "center": true,
+      "alwaysOnTop": false,
+      "resizable": true,
+      "decorations": true,
+      "transparent": false,
+      "theme": "Dark"
+    }, {
+      "label": "overlay",
+      "title": "Veylo AI — переводчик",
+      "url": "index.html?window=overlay",
+      "width": 360,
+      "height": 280,
+      "minWidth": 320,
+      "minHeight": 240,
+      "maxWidth": 900,
+      "maxHeight": 900,
+      "visible": false,
+      "alwaysOnTop": false,
+      "skipTaskbar": true,
+      "resizable": true,
+      "decorations": false,
+      "transparent": true,
+      "theme": "Dark"
+    }, {
+      "label": "backdrop",
+      "title": "Veylo AI — оверлей",
+      "url": "backdrop.html",
+      "visible": false,
+      "alwaysOnTop": true,
+      "skipTaskbar": true,
+      "resizable": false,
+      "decorations": false,
+      "transparent": true,
+      "shadow": false,
+      "backgroundColor": "#00000000",
+      "theme": "Dark"
+    }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+  }
+}
